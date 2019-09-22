@@ -1,27 +1,34 @@
 public class QRData {
 
-    private String time;
-    private String sum;
-    private String fn;
-    private String n; // i
-    private String fp;
-    private String i;
+    private String dateTime; // дата и время осуществления расчета в формате ГГГГММДДТЧЧММ
+    private String sum; // сумма расчета в рублях и копейках, разделенных точкой
+    private String fn; // заводской номер фискального накопителя
+    private String n; // признак расчетах
+    private String fp; // фискальный признак документа, нулями не дополняется
+    private String i; // порядковый номер фискального документа, нулями не дополняется
 
     public QRData() {
     }
 
-    public String getTime() {
-        return time;
+    public String getDateTime() {
+        return dateTime;
     }
 
-    public void setTime(String time) {
-        StringBuilder builder = new StringBuilder(time.substring(2));
-        builder.insert(4, "-");
-        builder.insert(7, "-");
-        builder.insert(13, ":");
-        builder.insert(16, ":");
-
-        this.time = builder.toString();
+    public void setDateTime(String dateTime) {
+        if (dateTime.length() > 14) {
+            StringBuilder builder = new StringBuilder(dateTime.substring(2));
+            builder.insert(4, "-");
+            builder.insert(7, "-");
+            builder.insert(13, ":");
+            if (dateTime.length() == 15) {
+                builder.insert(16, ":00");
+            } else if (dateTime.length() == 17) {
+                builder.insert(16, ":");
+            }
+            this.dateTime = builder.toString();
+        } else {
+            this.dateTime = "";
+        }
     }
 
     public String getSum() {
@@ -29,7 +36,7 @@ public class QRData {
     }
 
     public void setSum(String sum) {
-        this.sum = sum.replace(".", "").substring(2);
+        this.sum = getClippedValue(sum.replace(".", ""), 2);
     }
 
     public String getFn() {
@@ -37,7 +44,7 @@ public class QRData {
     }
 
     public void setFn(String fn) {
-        this.fn = fn.substring(3);
+        this.fn = getClippedValue(fn, 3);
     }
 
     public String getN() {
@@ -45,7 +52,7 @@ public class QRData {
     }
 
     public void setN(String n) {
-        this.n = n.substring(2);
+        this.n = getClippedValue(n, 2);
     }
 
     public String getFp() {
@@ -53,7 +60,7 @@ public class QRData {
     }
 
     public void setFp(String fp) {
-        this.fp = fp.substring(3);
+        this.fp = getClippedValue(fp, 3);
     }
 
     public String getI() {
@@ -61,6 +68,14 @@ public class QRData {
     }
 
     public void setI(String i) {
-        this.i = i.substring(2);
+        this.i = getClippedValue(i, 2);
+    }
+
+    private String getClippedValue(String value, int length) {
+        if (value.length() > length) {
+            return value.substring(length);
+        } else {
+            return  "";
+        }
     }
 }

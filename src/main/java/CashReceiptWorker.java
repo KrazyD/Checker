@@ -22,99 +22,84 @@ import java.nio.charset.StandardCharsets;
 
 public class CashReceiptWorker {
 
-    private static final String URL_SECURED_BY_BASIC_AUTHENTICATION = "https://proverkacheka.nalog.ru:9999/v1/mobile/users/login";
-    //    private static final String URL_REQUEST = "https://proverkacheka.nalog.ru:9999/v1/ofds/*/inns/*/fss" +
-//            "/9287440300143277/operations/1/tickets/51419?fiscalSign=2049110697&date=2019-09-06T20:57:00&sum=157600";
-    private static final String URL_REQUEST = "https://proverkacheka.nalog.ru:9999/v1/ofds/*/inns/*/fss" +
-            "/9281000100009218/operations/1/tickets/49916?fiscalSign=3487040725&date=2019-09-06T20:56:00&sum=7250";
+    private HttpClientContext context = null;
+    private HttpClient client = null;
 
-    //    private static final String URL_REQUEST_FULL = "https://proverkacheka.nalog.ru:9999/v1/inns/*/kkts/*/fss" +
-//            "/9287440300143277/tickets/51419?fiscalSign=2049110697&sendToEmail=no";
-    private static final String URL_REQUEST_FULL = "https://proverkacheka.nalog.ru:9999/v1/inns/*/kkts/*/fss" +
-            "/9281000100009218/tickets/49916?fiscalSign=3487040725&sendToEmail=no";
+    private static final String LOGIN_URL = "https://proverkacheka.nalog.ru:9999/v1/mobile/users/login";
+    private static final String CASH_RECEIPT_CHECK_URL = "https://proverkacheka.nalog.ru:9999/v1/ofds/*/inns/*/fss/%s/operations/%s/tickets/%s?fiscalSign=%s&date=%s&sum=%s";
+    private static final String CASH_RECEIPT_DATA_URL = "https://proverkacheka.nalog.ru:9999/v1/inns/*/kkts/*/fss/%s/tickets/%s?fiscalSign=%s&sendToEmail=no";
+
+    public CashReceiptWorker(String phoneNumber, String password) {
+        createContext(phoneNumber, password);
+    }
 
 
-    public static void checkCashReceipt() throws IOException {
+    public int loginToFNS() throws IOException {
 
-        HttpHost targetHost = new HttpHost(URL_SECURED_BY_BASIC_AUTHENTICATION);
+        HttpResponse response = client.execute(new HttpGet(LOGIN_URL), context);
+
+        return response.getStatusLine().getStatusCode();
+    }
+
+    public int cashReceiptCheck(QRData qrData) throws IOException {
+
+        String request = String.format(CASH_RECEIPT_CHECK_URL, qrData.getFn(), qrData.getN(),
+                qrData.getI(), qrData.getFp(), qrData.getDateTime(), qrData.getSum());
+        HttpResponse response = client.execute(new HttpGet(request), context);
+
+        return response.getStatusLine().getStatusCode();
+    }
+
+    public String getCashRecieptData(QRData qrData) throws IOException, InterruptedException {
+
+        String request = String.format(CASH_RECEIPT_DATA_URL, qrData.getFn(), qrData.getI(), qrData.getFp());
+
+        HttpGet httpGet = new HttpGet(request);
+        httpGet.setHeader("device-id", "");
+        httpGet.setHeader("device-os", "");
+
+        HttpResponse response = client.execute(httpGet, context);
+
+        int statusCode = response.getStatusLine().getStatusCode();
+
+        int counter = 5;
+
+        if (statusCode == 202) {
+            while (counter != 0 && statusCode != 200) {
+                Thread.sleep(1000);
+                response = client.execute(httpGet, context);
+                statusCode = response.getStatusLine().getStatusCode();
+                counter--;
+            }
+        }
+
+        if (statusCode == 200) {
+            HttpEntity entity = response.getEntity();
+            Header encodingHeader = entity.getContentEncoding();
+
+            Charset encoding = encodingHeader == null ? StandardCharsets.UTF_8 :
+                    Charsets.toCharset(encodingHeader.getValue());
+
+            return EntityUtils.toString(entity, StandardCharsets.UTF_8);
+        } else {
+            return null;
+        }
+    }
+
+    private void createContext(String phoneNumber, String password) {
+        HttpHost targetHost = new HttpHost(LOGIN_URL);
         CredentialsProvider credsProvider = new BasicCredentialsProvider();
         credsProvider.setCredentials(AuthScope.ANY,
-                new UsernamePasswordCredentials("+79920279024", "375136"));
+                new UsernamePasswordCredentials(phoneNumber, password));
 
         AuthCache authCache = new BasicAuthCache();
         authCache.put(targetHost, new BasicScheme());
 
-        // Add AuthCache to the execution context
-        HttpClientContext context = HttpClientContext.create();
+        context = HttpClientContext.create();
         context.setCredentialsProvider(credsProvider);
         context.setAuthCache(authCache);
 
-        HttpClient client = HttpClientBuilder.create().build();
-        HttpResponse response = client.execute(
-                new HttpGet(URL_SECURED_BY_BASIC_AUTHENTICATION), context);
-
-        int statusCode1 = response.getStatusLine().getStatusCode();
-
-        //-----------------------------------------------------------------
-        QRWorker worker = new QRWorker();
-        String qrString = worker.sendQRFile("src/main/resources/qr_1.jpg");
-        QRData qrData = worker.parseResponse(qrString);
-        //-----------------------------------------------------------------
-
-        String reqest = "https://proverkacheka.nalog.ru:9999/v1/ofds/*/inns/*/" +
-                "fss/" +
-                qrData.getFn() +
-                "/operations/" +
-                qrData.getN() +
-                "/tickets/" +
-                qrData.getI() +
-                "?fiscalSign=" +
-                qrData.getFp() +
-                "&date=" +
-                qrData.getTime() +
-                "&sum=" +
-                qrData.getSum();
-
-        HttpResponse response2 = client.execute(
-                new HttpGet(reqest), context);
-
-        int statusCode2 = response2.getStatusLine().getStatusCode();
-
-
-        String reqestFull = "https://proverkacheka.nalog.ru:9999/v1/inns/*/kkts/*/fss/" +
-                qrData.getFn() +
-                "/tickets/" +
-                qrData.getI() +
-                "?fiscalSign=" +
-                qrData.getFp() +
-                "&sendToEmail=no";
-
-        HttpGet httpGet = new HttpGet(reqestFull);
-        httpGet.setHeader("device-id", "");
-        httpGet.setHeader("device-os", "");
-
-        HttpResponse response3 = client.execute(httpGet, context);
-
-        int statusCode3 = response3.getStatusLine().getStatusCode();
-
-        if (statusCode3 == 200) {
-            HttpEntity entity = response3.getEntity();
-            Header encodingHeader = entity.getContentEncoding();
-
-            // you need to know the encoding to parse correctly
-            Charset encoding = encodingHeader == null ? StandardCharsets.UTF_8 :
-                    Charsets.toCharset(encodingHeader.getValue());
-
-            // use org.apache.http.util.EntityUtils to read json as string
-            String json = EntityUtils.toString(entity, StandardCharsets.UTF_8);
-            System.out.println("УРАААААААААААААААААААААААААААА!!!!!!!!!!!!!!!");
-            System.out.println(json);
-            int q1 = 0;
-        }
-
-        int q2 = 0;
-
+        client = HttpClientBuilder.create().build();
     }
-
 
 }

@@ -1,3 +1,4 @@
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
@@ -11,33 +12,42 @@ import java.io.*;
 
 public class QRWorker {
 
+    private final String API_URL = "http://api.qrserver.com/v1/read-qr-code/";
 
-    public String sendQRFile(String filePath) throws IOException {
+    public String parseQRCode(String filePath) throws IOException {
 
         CloseableHttpClient httpClient = HttpClients.createDefault();
-        HttpPost uploadFile = new HttpPost("http://api.qrserver.com/v1/read-qr-code/");
+        HttpPost postToUpload = new HttpPost(API_URL);
         MultipartEntityBuilder builder = MultipartEntityBuilder.create();
 
-        // This attaches the file to the POST:
-        File f = new File(filePath);
+        File fileQR = new File(filePath);
         builder.addBinaryBody(
                 "file",
-                new FileInputStream(f),
+                new FileInputStream(fileQR),
                 ContentType.APPLICATION_OCTET_STREAM,
-                f.getName()
+                fileQR.getName()
         );
 
         HttpEntity multipart = builder.build();
-        uploadFile.setEntity(multipart);
-        CloseableHttpResponse response = httpClient.execute(uploadFile);
+        postToUpload.setEntity(multipart);
+        CloseableHttpResponse response = httpClient.execute(postToUpload);
         HttpEntity responseEntity = response.getEntity();
 
-        String responseXml = EntityUtils.toString(responseEntity);
+        return EntityUtils.toString(responseEntity);
+    }
 
-        int startIndex = responseXml.indexOf("t=");
-        int endIndex = responseXml.lastIndexOf("\",\"error");
+    public QRResponce parseQRResponse(String response) {
+        ObjectMapper mapper = new ObjectMapper();
+        QRResponce qrResponse = null;
 
-        return responseXml.substring(startIndex, endIndex);
+        try {
+            qrResponse = mapper.readValue(response.substring(1, response.length() - 1), QRResponce.class);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return qrResponse;
     }
 
     public QRData parseResponse(String qrString) {
@@ -47,7 +57,7 @@ public class QRWorker {
         String[] qrArray = qrString.split("&");
 
         if (qrArray.length == 6) {
-            qrData.setTime(qrArray[0]);
+            qrData.setDateTime(qrArray[0]);
             qrData.setSum(qrArray[1]);
             qrData.setFn(qrArray[2]);
             qrData.setI(qrArray[3]);
